@@ -14,57 +14,42 @@
             $name = $DB_PREFIX.$ref->getName();
             
             $props = array();
-            
-            $i = 0; 
            
             $props = array();
             $values = array();  
 			$types = array();
              
-                foreach($ref->getProperties() as $prop)
-                {
-                    if($prop->getName() != "id")
-                    {
-                        array_push($props, $prop->getName());
-						array_push($types, gettype($prop->getValue($this)));
-						if(gettype($prop->getValue($this)) == "string")
-							array_push($values, "\"".$prop->getValue($this)."\"");
-						else
-							array_push($values, $prop->getValue($this));
-						
-                    }   
-                }
+			foreach($ref->getProperties() as $prop)
+			{
+				if($prop->getName() != "id")
+				{
+					array_push($props, $prop->getName());
+					array_push($types, gettype($prop->getValue($this)));
+					array_push($values, $prop->getValue($this));
+				}   
+			}
             
-           
-			
-			
-				
-            
-            
+			$typedef = Model::createTypeDef($props, $values, $types);
+
             
             // Create table if needed
             if(mysql_num_rows( Model::dbQuery("SHOW TABLES LIKE '".$name."'"))<=0)
             {
                 $varsarray = array();
-				$dbtypes = array("string" => "varchar(255)", "integer" => "int");
 					
-				for($i = 0; $i < sizeof($props); $i++)
+				foreach($typedef as $td)
 				{
-					array_push($varsarray, $props[$i]." ".$dbtypes[$types[$i]]);	
+					array_push($varsarray, $td["name"]." ".$td["dbtype"]);	
 				}
 					
 				$vars = implode(", ", $varsarray);
 				
 				$sql = "CREATE TABLE ".$name." ( "; 
-                
-      
                 $sql .= "`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY, ";
-                //$sql .= implode(" varchar(255), ", $props);
-                //$sql .= " varchar(255) ";
 				$sql .= $vars;
                 $sql .= ")";
 
-                echo $sql;
+              
                 
                 if(!Model::dbQuery($sql))
                 {
@@ -83,16 +68,25 @@
                 
                 
             // Add
+			$vals = array();
+			
+			for($i = 0; $i < sizeof($typedef); $i++)
+			{
+				$td = $typedef[$i];
+				$vals[$i] = $td["value"];
+			}
+
             if($this->id >= 0)
-                $sql = "INSERT INTO ".$name."(id, ".implode(",", $props).") VALUES(".$this->id.", ".implode(",", $values).")";
+                $sql = "INSERT INTO ".$name."(id, ".implode(",", $props).") VALUES(".$this->id.", ".implode(",", $vals).")";
             else
-                $sql = "INSERT INTO ".$name."(".implode(",", $props).") VALUES(".implode(",", $values).")";
+                $sql = "INSERT INTO ".$name."(".implode(",", $props).") VALUES(".implode(",", $vals).")";
             
             if(!Model::dbQuery($sql))
             {
                 echo mysql_error();
             }
            
+
         }
         
         public static function getAllObjects($order)
@@ -140,14 +134,47 @@
             
         }
         
+		public function createTypeDef($props, $values, $types)
+		{
+			$typedef = array();
+			
+			$ts = array("boolean" => "BOOL", "integer" => "INT", "double" => "FLOAT", 
+							"string" => "VARCHAR 255", "array" => "TEXT", "object" => "TEXT", 
+							 "resource" => "TEXT", "NULL" => "TEXT", "unknown type" => "TEXT");
+			
+			if(sizeof($props) == sizeof($values) && sizeof($props) == sizeof($types))
+			{
+				$size = sizeof($props);
+				
+				for($i = 0; $i < $size; $i++)
+				{
+					$val = $values[$i];
+					$dbt = $ts[$types[$i]];
+					
+					if($dbt == "TEXT")
+						$val = serialize($val);
+					if($dbt == "VARCHAR 255")
+						$val = "\"".$val."\"";
+
+					
+					$ar = array("name" => $props[$i], "value" => $val, "type" => $types[$i], "dbtype" => $dbt); 
+					
+					array_push($typedef, $ar);
+				}
+			}
+			
+			
+			return $typedef;
+		}
+		
 		public static function dbQuery($sql)
 		{
 			include("db.inc.php");
-			
-			$sql = mysql_real_escape_string($sql);
-		
+
 			mysql_connect($DB_SERVER, $DB_USER, $DB_PWD) or die(mysql_error());
             mysql_select_db($DB_DB) or die(mysql_error());
+			
+			//$sql = mysql_real_escape_string($sql);
 			
 			$res = mysql_query($sql);
 			
