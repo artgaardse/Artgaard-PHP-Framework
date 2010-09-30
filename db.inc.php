@@ -5,5 +5,7 @@
 	$DB_USER = "root";
 	$DB_PWD = ""; 
     $DB_PREFIX = "model_";
+	
+	
 
 ?>
